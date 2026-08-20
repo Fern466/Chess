@@ -1,6 +1,12 @@
 use colored::Colorize;
 use colored::ColoredString;
 use std::io;
+
+mod lib;
+use lib::Input;
+use lib::input;
+use lib::bitboard;
+use lib::Color;
 fn main() {
     /*
     Order for pieces:
@@ -10,12 +16,35 @@ fn main() {
     11 is e.p. and castling
      */
     let mut bitboard = bitboard();
+    display_board(&bitboard);
+}
+
+fn player(bitboard: &mut [u64; 13], color: &Color){
+    //this function gets player input and proccesses it to prove its validity, then changes the bitboard
     let input = get_input();
-    display_board(bitboard);
+    while validate_input(bitboard, &input, color) {player(bitboard, color)}
+    move_piece(bitboard, input);
+}
+
+fn validate_input(bitboard: &[u64; 13], input: &Input, color: &Color) -> bool{
+    let mut temp = (false, false);
+    for i in 0..12 {
+        if bitboard[i] & input.pos != 0{temp.0 = true}
+        if bitboard[i] & input.target != 0{temp.1 = true}
+    }
+
+    if temp.0 && temp.1 {
+        
+    }
+    false
+}
+
+fn move_piece(bitboard: &mut [u64; 13], input: Input){
+
 }
 
 //This block of code is strictly for testing purposes. It will be removed after TUI is implemented.
-fn get_input() -> input {
+fn get_input() -> Input {
     let mut temp = String::new();
     io::stdin().read_line(&mut temp).expect("Failed to read line");
     let temp = temp.trim();
@@ -41,7 +70,7 @@ fn get_input() -> input {
 }
 
 //Again, temporary.
-fn display_board(bitboard: [u64; 13]){
+fn display_board(bitboard: &[u64; 13]){
     //can't put these as constants for some reason
     let pieces: [ColoredString; 12] = ["P".black(), "R".black(), "K".black(), "B".black(), "Q".black(), "$".black(), "P".white(), "R".white(), "K".white(), "B".white(), "Q".white(), "$".white()];
 
@@ -58,44 +87,3 @@ fn display_board(bitboard: [u64; 13]){
         println!("\n");
     }
 }
-
-fn bitboard() -> [u64; 13]{
-    let mut bitboard = [0u64; 13];
-
-    //Black
-    bitboard[0] = 0b11111111 << 8;
-    bitboard[1] = 0b10000001;
-    bitboard[2] = 0b01000010;
-    bitboard[3] = 0b00100100;
-    bitboard[4] = 0b00010000;
-    bitboard[5] = 0b00001000;
-
-    
-
-    //White
-    bitboard[6] = 0b11111111 << 48;
-    bitboard[7] = 0b10000001 << 56;
-    bitboard[8] = 0b01000010 << 56;
-    bitboard[9] = 0b00100100 << 56;
-    bitboard[10] = 0b00001000 << 56;
-    bitboard[11] = 0b00010000 << 56;
-
-    //The last piece of the board doesn't need to be modified since it only gets added to in special circumstances.
-    return bitboard;
-}
-
-#[derive(PartialEq)]
-pub struct input {
-    pos: u64,
-    target: u64,
-}
-
-
-pub fn input(raw_input: Vec<u8>) -> Option<input>{
-    for x in &raw_input{if *x > 7 || *x < 0 {return None}}
-    let pos = 1 << (raw_input[1] * 8) + raw_input[0];
-    let target = 1 << (raw_input[3] * 8) + raw_input[2];
-    Some(input{pos: pos, target: target})
-}
-
-
