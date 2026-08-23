@@ -2,11 +2,14 @@ use colored::Colorize;
 use colored::ColoredString;
 use std::io;
 
+//is there a way to import the whole file?
 mod lib;
 use lib::Input;
 use lib::input;
 use lib::bitboard;
 use lib::Color;
+use lib::shift;
+use lib::find_coords;
 fn main() {
     /*
     Order for pieces:
@@ -26,18 +29,57 @@ fn player(bitboard: &mut [u64; 13], color: &Color){
     move_piece(bitboard, input);
 }
 
-fn validate_input(bitboard: &[u64; 13], input: &Input, color: &Color) -> bool{
-    let mut temp = (false, false);
-    for i in 0..12 {
-        if bitboard[i] & input.pos != 0{temp.0 = true}
-        if bitboard[i] & input.target != 0{temp.1 = true}
+fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> bool{
+    //first will be friendlies, last enemies
+    let mut boards = (0, 0);
+    for i in 0..12{
+        if i < 6 && *color == Color::Black{boards.0 &= bitboard[i]} else {boards.1 &= bitboard[i]}
+        if i > 5 && *color == Color::White{boards.0 &= bitboard[i]} else {boards.1 &= bitboard[i]}
     }
 
-    if temp.0 && temp.1 {
-        
+    //cleaning up any en passant opportunities. We don't need to check anything for it here since an en passant would have happened by the time it is the players turn
+    if *color == Color::Black {bitboard[13] |= (0b00000000 << 8)} else {bitboard[13] |= (0b00000000 << 48)}
+
+    //This if statement is just a "gatekeeper" since otherwise we'd need to check this later
+    if boards.0 & input.target == 0{
+        for i in 0..12 {
+            if bitboard[i] & input.pos != 0{
+                match i % 6{
+                    0 => {return pawn(bitboard, input, color, &boards.1)}
+                    1 => {}
+                    2 => {}
+                    3 => {}
+                    4 => {
+                        if *color == Color::Black {} else {}
+                    }
+                    5 => {
+                        if *color == Color::Black {} else {}
+                    }
+                    _ => {}
+                }
+            }
+        }
+    } else {
+        //castling goes here
     }
     false
 }
+
+fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u64) -> bool{
+    let offset = if *color == Color::Black {1} else {-1};
+    if shift(input.pos, offset * 8) == input.target {return true}
+    //Beware, this does interact with en passant code
+    let temp = find_coords(input.pos);
+    let correct_pos = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
+    if shift(input.pos, offset * 16) == input.target && correct_pos {
+        bitboard[13] |= input.target;
+        return true;
+    }
+    if shift(input.pos, (offset * 8) + 1) == input.target && enemy_board & input.target != 0 {return true}
+    if shift(input.pos, (offset * 8) - 1) == input.target && enemy_board & input.target != 0 {return true}
+    false
+}
+
 
 fn move_piece(bitboard: &mut [u64; 13], input: Input){
 
