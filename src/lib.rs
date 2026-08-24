@@ -37,6 +37,7 @@ pub fn shift(num: u64, offset: i32) -> u64 {
 pub struct Input {
     pub pos: u64,
     pub target: u64,
+    pub piece: Piece,
 }
 
 #[derive(PartialEq)]
@@ -45,11 +46,38 @@ pub enum Color {
     White = -1
 }
 
-pub fn input(raw_input: Vec<u8>) -> Option<Input>{
+#[derive(PartialEq, Debug)]
+pub enum Piece{
+    None,
+    Pawn,
+    Rook,
+    Knight,
+    Bishop,
+    King,
+    Queen
+}
+
+//Gives a bitboard of the current position and of the target, as well as identifies the type of piece it is.
+pub fn input(raw_input: Vec<u8>, bitboard: &[u64; 13]) -> Option<Input>{
     for x in &raw_input{if *x > 8 {return None}}
     let pos = 1 << (raw_input[1] * 8) + raw_input[0];
     let target = 1 << (raw_input[3] * 8) + raw_input[2];
-    Some(Input{pos: pos, target: target})
+
+    let mut piece = Piece::None;
+    for i in 0..12 {
+        if bitboard[i] & pos != 0{
+            piece = match i % 6{
+                0 => {Piece::Pawn}
+                1 => {Piece::Rook}
+                2 => {Piece::Knight}
+                3 => {Piece::Bishop}
+                4 => {Piece::Queen}
+                5 => {Piece::King}
+                _ => {Piece::None}
+            }
+        }
+    }
+    Some(Input{pos: pos, target: target, piece: piece})
 }
 
 //This does the exact same job as shift, but in reverse. It does assume that there is only one number on the board, but it doesn't matter in context

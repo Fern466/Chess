@@ -4,6 +4,7 @@ use std::io;
 
 //is there a way to import the whole file?
 mod lib;
+use lib::Piece;
 use lib::Input;
 use lib::input;
 use lib::bitboard;
@@ -20,13 +21,16 @@ fn main() {
      */
     let mut bitboard = bitboard();
     display_board(&bitboard);
+    player(&mut bitboard, &Color::White);
+    display_board(&bitboard);
 }
 
 fn player(bitboard: &mut [u64; 13], color: &Color){
     //this function gets player input and proccesses it to prove its validity, then changes the bitboard
-    let input = get_input();
+    let input = get_input(bitboard);
+    println!("{:?}", input.piece);
     while validate_input(bitboard, &input, color) {player(bitboard, color)}
-    move_piece(bitboard, input);
+    move_piece(bitboard, input, color);
 }
 
 fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> bool{
@@ -37,27 +41,17 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
         if i > 5 && *color == Color::White{boards.0 &= bitboard[i]} else {boards.1 &= bitboard[i]}
     }
 
-    //cleaning up any en passant opportunities. We don't need to check anything for it here since an en passant would have happened by the time it is the players turn
-    if *color == Color::Black {bitboard[13] |= (0b00000000 << 8)} else {bitboard[13] |= (0b00000000 << 48)}
 
     //This if statement is just a "gatekeeper" since otherwise we'd need to check this later
     if boards.0 & input.target == 0{
-        for i in 0..12 {
-            if bitboard[i] & input.pos != 0{
-                match i % 6{
-                    0 => {return pawn(bitboard, input, color, &boards.1)}
-                    1 => {}
-                    2 => {}
-                    3 => {}
-                    4 => {
-                        if *color == Color::Black {} else {}
-                    }
-                    5 => {
-                        if *color == Color::Black {} else {}
-                    }
-                    _ => {}
-                }
-            }
+        match input.piece {
+            Piece::Pawn => {return pawn(bitboard, input, color, &boards.1)}
+            Piece::Rook => {}
+            Piece::Knight => {}
+            Piece::Bishop => {}
+            Piece::Queen => {}
+            Piece::King => {}
+            _ => {return false}
         }
     } else {
         //castling goes here
@@ -66,27 +60,67 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
 }
 
 fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u64) -> bool{
-    let offset = if *color == Color::Black {1} else {-1};
-    if shift(input.pos, offset * 8) == input.target {return true}
+    //This technically doesn't have a purpose yet. It should be after e.p. code and after double move code.
+    clean_bitboard(bitboard);
+
     //Beware, this does interact with en passant code
+    let offset = if *color == Color::Black {1} else {-1};
     let temp = find_coords(input.pos);
     let correct_pos = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
-    if shift(input.pos, offset * 16) == input.target && correct_pos {
-        bitboard[13] |= input.target;
+    if shift(input.pos, offset * 16) == input.target && correct_pos && enemy_board & input.target == 0 {
+        bitboard[12] |= input.target;
         return true;
-    }
+    }    
+    if shift(input.pos, offset * 8) == input.target && enemy_board & input.target == 0 {return true}
     if shift(input.pos, (offset * 8) + 1) == input.target && enemy_board & input.target != 0 {return true}
     if shift(input.pos, (offset * 8) - 1) == input.target && enemy_board & input.target != 0 {return true}
     false
 }
 
 
-fn move_piece(bitboard: &mut [u64; 13], input: Input){
+fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
+    let mut i = if *color == Color::White{5} else {0};
+    i += match input.piece{
+            Piece::Pawn => {0}
+            Piece::Rook => {1}
+            Piece::Knight => {2}
+            Piece::Bishop => {3}
+            Piece::Queen => {4}
+            Piece::King => {5}
+            _ => {12}
+    };
 
+    if i < 12 {
+        bitboard[i] |= input.pos;
+
+        for j in 0..12{
+            if bitboard[j] & input.target != 0{
+                bitboard[j] |= input.target;
+            }
+        }
+
+        bitboard[i] |= input.target;
+
+        //This is in case there is a special state that needs to be taken care of (aka of the 13th board)
+        if bitboard[12] & input.pos != 0 {
+            bitboard[12] |= input.pos;
+            if bitboard[12] & input.target == 0 {
+                bitboard[12] |= input.target;
+            }
+        }
+    }
+}
+
+//Cleans the pawn part of the 13th board
+fn clean_bitboard(bitboard: &mut [u64; 13]){
+    for i in 0..5{
+        let temp = 0b11111111 << 24 + (8 * i);
+        bitboard[12] &= !temp;
+    }
 }
 
 //This block of code is strictly for testing purposes. It will be removed after TUI is implemented.
-fn get_input() -> Input {
+fn get_input(bitboard: &[u64; 13]) -> Input {
     let mut temp = String::new();
     io::stdin().read_line(&mut temp).expect("Failed to read line");
     let temp = temp.trim();
@@ -107,8 +141,8 @@ fn get_input() -> Input {
         }
     }
 
-    let input = input(s);
-    if input == None {get_input()} else {return input.unwrap()}
+    let input = input(s, bitboard);
+    if input == None {get_input(bitboard)} else {return input.unwrap()}
 }
 
 //Again, temporary.
