@@ -29,7 +29,7 @@ fn player(bitboard: &mut [u64; 13], color: &Color){
     //this function gets player input and proccesses it to prove its validity, then changes the bitboard
     let input = get_input(bitboard);
     println!("{:?}", input.piece);
-    while validate_input(bitboard, &input, color) {player(bitboard, color)}
+    while !validate_input(bitboard, &input, color) {player(bitboard, color)}
     move_piece(bitboard, input, color);
 }
 
@@ -37,8 +37,8 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
     //first will be friendlies, last enemies
     let mut boards = (0, 0);
     for i in 0..12{
-        if i < 6 && *color == Color::Black{boards.0 &= bitboard[i]} else {boards.1 &= bitboard[i]}
-        if i > 5 && *color == Color::White{boards.0 &= bitboard[i]} else {boards.1 &= bitboard[i]}
+        if i < 6 && *color == Color::Black{boards.0 |= bitboard[i]} else {boards.1 |= bitboard[i]}
+        if i > 5 && *color == Color::White{boards.0 |= bitboard[i]} else {boards.1 |= bitboard[i]}
     }
 
 
@@ -66,20 +66,20 @@ fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u6
     //Beware, this does interact with en passant code
     let offset = if *color == Color::Black {1} else {-1};
     let temp = find_coords(input.pos);
-    let correct_pos = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
-    if shift(input.pos, offset * 16) == input.target && correct_pos && enemy_board & input.target == 0 {
+    let correct_pos: bool = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
+    if shift(input.pos, offset * 16) == input.target && correct_pos && (enemy_board & input.target) == 0 {
         bitboard[12] |= input.target;
         return true;
     }    
-    if shift(input.pos, offset * 8) == input.target && enemy_board & input.target == 0 {return true}
-    if shift(input.pos, (offset * 8) + 1) == input.target && enemy_board & input.target != 0 {return true}
-    if shift(input.pos, (offset * 8) - 1) == input.target && enemy_board & input.target != 0 {return true}
+    if shift(input.pos, offset * 8) == input.target && (enemy_board & input.target) == 0 {return true}
+    if shift(input.pos, (offset * 8) + 1) == input.target && (enemy_board & input.target) != 0 {return true}
+    if shift(input.pos, (offset * 8) - 1) == input.target && (enemy_board & input.target) != 0 {return true}
     false
 }
 
 
 fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
-    let mut i = if *color == Color::White{5} else {0};
+    let mut i = if *color == Color::White{6} else {0};
     i += match input.piece{
             Piece::Pawn => {0}
             Piece::Rook => {1}
@@ -90,23 +90,21 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
             _ => {12}
     };
 
-    if i < 12 {
-        bitboard[i] |= input.pos;
+    bitboard[i] ^= input.pos;
 
-        for j in 0..12{
-            if bitboard[j] & input.target != 0{
-                bitboard[j] |= input.target;
-            }
+    for j in 0..12{
+        if bitboard[j] & input.target != 0{
+            bitboard[j] |= input.target;
         }
+    }
 
-        bitboard[i] |= input.target;
+    bitboard[i] |= input.target;
 
-        //This is in case there is a special state that needs to be taken care of (aka of the 13th board)
-        if bitboard[12] & input.pos != 0 {
-            bitboard[12] |= input.pos;
-            if bitboard[12] & input.target == 0 {
-                bitboard[12] |= input.target;
-            }
+    //This is in case there is a special state that needs to be taken care of (aka of the 13th board)
+    if bitboard[12] & input.pos != 0 {
+        bitboard[12] |= input.pos;
+        if bitboard[12] & input.target == 0 {
+            bitboard[12] |= input.target;
         }
     }
 }

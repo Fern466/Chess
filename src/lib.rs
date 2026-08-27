@@ -27,9 +27,9 @@ pub fn bitboard() -> [u64; 13]{
 //This needs to be a thing since for some reason x << -1 != x >> 1. Weird.
 pub fn shift(num: u64, offset: i32) -> u64 {
     if offset < 0 {
-        return (num >> offset.abs());
+        return num >> offset.abs();
     } else {
-        return (num << offset);
+        return num << offset;
     }
 }
 

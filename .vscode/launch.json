@@ -7,12 +7,12 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Launch with lldb‑dap",
+            "name": "Launch with lldb",
             "program": "target/debug/chess",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopOnEntry": false,
-            // Path to the lldb‑dap binary (omit if it’s already in $PATH)
+            "lldbAdapterPath": "/usr/lib/llvm-19/bin/lldb-dap"
         }
     ]
 }
