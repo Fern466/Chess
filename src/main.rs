@@ -11,6 +11,7 @@ use lib::bitboard;
 use lib::Color;
 use lib::shift;
 use lib::find_coords;
+use lib::boundary_check;
 fn main() {
     /*
     Order for pieces:
@@ -29,8 +30,9 @@ fn player(bitboard: &mut [u64; 13], color: &Color){
     //this function gets player input and proccesses it to prove its validity, then changes the bitboard
     let input = get_input(bitboard);
     println!("{:?}", input.piece);
-    while !validate_input(bitboard, &input, color) {player(bitboard, color)}
-    move_piece(bitboard, input, color);
+    if validate_input(bitboard, &input, color) {
+        move_piece(bitboard, input, color);
+    } else {player(bitboard, color)}
 }
 
 fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> bool{
@@ -46,8 +48,8 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
     if boards.0 & input.target == 0{
         match input.piece {
             Piece::Pawn => {return pawn(bitboard, input, color, &boards.1)}
+            Piece::Knight => {return knight(bitboard, input)}
             Piece::Rook => {}
-            Piece::Knight => {}
             Piece::Bishop => {}
             Piece::Queen => {}
             Piece::King => {}
@@ -65,7 +67,7 @@ fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u6
 
     //Beware, this does interact with en passant code
     let offset = if *color == Color::Black {1} else {-1};
-    let temp = find_coords(input.pos);
+    let temp = find_coords(&input.pos);
     let correct_pos: bool = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
     if shift(input.pos, offset * 16) == input.target && correct_pos && (enemy_board & input.target) == 0 {
         bitboard[12] |= input.target;
@@ -74,6 +76,22 @@ fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u6
     if shift(input.pos, offset * 8) == input.target && (enemy_board & input.target) == 0 {return true}
     if shift(input.pos, (offset * 8) + 1) == input.target && (enemy_board & input.target) != 0 {return true}
     if shift(input.pos, (offset * 8) - 1) == input.target && (enemy_board & input.target) != 0 {return true}
+    false
+}
+
+const POS_TRANSFORM: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, -1), (-1 , 1)];
+fn knight(bitboard: &mut [u64; 13], input: &Input) -> bool{
+    let ka_knit = (2, 1);
+    for i in 0..4{
+        let offset = find_coords(&input.pos);
+        let mut knight_offset: Vec<(i32, i32)> = vec!((POS_TRANSFORM[i].0 * ka_knit.0, POS_TRANSFORM[i].1 * ka_knit.1));
+        knight_offset.push((POS_TRANSFORM[i].0 * ka_knit.1, POS_TRANSFORM[i].1 * ka_knit.0));
+        if boundary_check(knight_offset[0].0 + offset.0 as i32) && boundary_check(knight_offset[0].1 + offset.1 as i32){
+            if shift(input.pos, (knight_offset[0].1 * 8) + knight_offset[0].0) == input.target {return true}
+        } else if boundary_check(knight_offset[1].0 + offset.0 as i32) && boundary_check(knight_offset[1].1 + offset.1 as i32){
+            if shift(input.pos, (knight_offset[1].1 * 8) + knight_offset[1].0) == input.target {return true}
+        }
+    }
     false
 }
 
