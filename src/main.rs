@@ -21,9 +21,11 @@ fn main() {
     11 is e.p. and castling
      */
     let mut bitboard = bitboard();
-    display_board(&bitboard);
-    player(&mut bitboard, &Color::White);
-    display_board(&bitboard);
+    loop{
+        display_board(&bitboard);
+        player(&mut bitboard, &Color::White);
+        display_board(&bitboard);
+    }
 }
 
 fn player(bitboard: &mut [u64; 13], color: &Color){
@@ -35,6 +37,7 @@ fn player(bitboard: &mut [u64; 13], color: &Color){
     } else {player(bitboard, color)}
 }
 
+const KING: [(i32, i32); 8] = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)];
 fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> bool{
     //first will be friendlies, last enemies
     let mut boards = (0, 0);
@@ -48,11 +51,26 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
     if boards.0 & input.target == 0{
         match input.piece {
             Piece::Pawn => {return pawn(bitboard, input, color, &boards.1)}
-            Piece::Knight => {return knight(bitboard, input)}
-            Piece::Rook => {}
-            Piece::Bishop => {}
-            Piece::Queen => {}
-            Piece::King => {}
+            Piece::Knight => {
+                clean_bitboard(bitboard);
+                return knight(input)
+            }
+            Piece::Queen | Piece::Bishop | Piece::Rook => {
+                //rook should  have castling
+                clean_bitboard(bitboard);
+                return diagonal_and_straight_check(input, boards.0 | boards.1);
+            }
+            Piece::King => {
+                //King does have to have castling.
+                clean_bitboard(bitboard);
+                let offset = find_coords(input.pos);
+                let target = find_coords(input.target);
+                for i in 0..8{
+                    if (offset.0 + KING[i].0, offset.1 + KING[i].1) == target {
+                        return true;
+                    }
+                }
+            }
             _ => {return false}
         }
     } else {
@@ -67,7 +85,7 @@ fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u6
 
     //Beware, this does interact with en passant code
     let offset = if *color == Color::Black {1} else {-1};
-    let temp = find_coords(&input.pos);
+    let temp = find_coords(input.pos);
     let correct_pos: bool = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
     if shift(input.pos, offset * 16) == input.target && correct_pos && (enemy_board & input.target) == 0 {
         bitboard[12] |= input.target;
@@ -79,17 +97,41 @@ fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u6
     false
 }
 
-const POS_TRANSFORM: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, -1), (-1 , 1)];
-fn knight(bitboard: &mut [u64; 13], input: &Input) -> bool{
-    let ka_knit = (2, 1);
-    for i in 0..4{
-        let offset = find_coords(&input.pos);
-        let mut knight_offset: Vec<(i32, i32)> = vec!((POS_TRANSFORM[i].0 * ka_knit.0, POS_TRANSFORM[i].1 * ka_knit.1));
-        knight_offset.push((POS_TRANSFORM[i].0 * ka_knit.1, POS_TRANSFORM[i].1 * ka_knit.0));
-        if boundary_check(knight_offset[0].0 + offset.0 as i32) && boundary_check(knight_offset[0].1 + offset.1 as i32){
-            if shift(input.pos, (knight_offset[0].1 * 8) + knight_offset[0].0) == input.target {return true}
-        } else if boundary_check(knight_offset[1].0 + offset.0 as i32) && boundary_check(knight_offset[1].1 + offset.1 as i32){
-            if shift(input.pos, (knight_offset[1].1 * 8) + knight_offset[1].0) == input.target {return true}
+const KNIGHT_TRANSFORM: [(i32, i32); 8] = [(2, 1), (1, 2), (2, -1), (1 , -2), (-2, 1), (-1, -2), (-2, 1), (2, -1)];
+fn knight(input: &Input) -> bool{
+    //this converts the bitboards to an x, y format since it becomes much easier to check them
+    for i in 0..8{
+        let offset = find_coords(input.pos);
+        let target = find_coords(input.target);
+        let target = (target.0 as i32, target.1 as i32);
+        let knight: (i32, i32) = (offset.0 as i32 + KNIGHT_TRANSFORM[i].0, offset.1 as i32 + KNIGHT_TRANSFORM[i].1);
+        if knight == target {return true};
+    }
+    false
+}
+
+//board in this situation is the union of the first 12 boards. We already have checking for friendlies outside of this, so it should just function the same. 
+//We NEED to check all the board though
+fn diagonal_and_straight_check(input: &Input, board: u64) -> bool{
+    //yoinked a lot of the code from chess_old since its suprisingly good. Also made a lot of new improvements
+    let offset = find_coords(input.pos);
+    let target = find_coords(input.target);
+    let displacement = ((target.0 - offset.0).signum(), (target.1 - offset.1).signum());
+    let mut obstructed = false;
+
+    //makes sure that those pieces can only do the appproved movement
+    if input.piece == Piece::Rook{if displacement.0 != 0 && displacement.1 != 0 {return false}}
+    if input.piece == Piece::Bishop{if displacement.0 == 0 || displacement.1 == 0 {return false}}
+
+    for i in 1..8{
+        if obstructed{return false}
+        let pos = (offset.0 + displacement.0 * i, offset.1 + displacement.1 * i);
+        if !boundary_check(pos.0) && !boundary_check(pos.1){break}
+
+        let temp_board: u64 = 1 << (pos.1 * 8) + pos.0;
+        if pos == target {return true};
+        if temp_board & board != 0 {
+            obstructed = true;
         }
     }
     false
@@ -112,7 +154,8 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
 
     for j in 0..12{
         if bitboard[j] & input.target != 0{
-            bitboard[j] |= input.target;
+            println!("Hello");
+            bitboard[j] ^= input.target;
         }
     }
 

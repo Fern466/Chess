@@ -81,19 +81,16 @@ pub fn input(raw_input: Vec<u8>, bitboard: &[u64; 13]) -> Option<Input>{
 }
 
 //This does the exact same job as shift, but in reverse. It does assume that there is only one number on the board, but it doesn't matter in context
-pub fn find_coords(board: &u64) -> (u8, u8){
-    let mut board = *board;
-    if board == 0 {return(0, 0)}
-    if board == 1 {return(1, 0)}
-    for i in 0..65{
-        board = board >> 1;  
-        if board == 1 {return((i % 8), (i / 8))};  
-    }
-    (0, 0)
+pub fn find_coords(board: u64) -> (i32, i32){
+    let zeros = board.trailing_zeros() as i32;
+    let x = zeros % 8;
+    let y = zeros / 8;
+    return (x, y);
 }
 
+//while there is most certainly a better way to do this, I don't know it
 pub fn boundary_check(x: i32) -> bool{
-    if x < 8 && x > 0 {return true};
+    if x <= 7 && x >= 0 {return true};
     false
 }
 
