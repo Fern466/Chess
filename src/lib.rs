@@ -9,7 +9,8 @@ pub fn bitboard() -> [u64; 13]{
     bitboard[4] = 0b00010000;
     bitboard[5] = 0b00001000;
 
-    
+    //Black Rook & King flags
+    bitboard[12] = 0b10001001;    
 
     //White
     bitboard[6] = 0b11111111 << 48;
@@ -19,6 +20,8 @@ pub fn bitboard() -> [u64; 13]{
     bitboard[10] = 0b00001000 << 56;
     bitboard[11] = 0b00010000 << 56;
 
+    //White Rook & King flags
+    bitboard[12] |= 0b10010001 << 56;  
     //The last piece of the board doesn't need to be modified since it only gets added to in special circumstances.
     //We do need to apply it to all Rooks and Kings.
     return bitboard;
@@ -38,6 +41,7 @@ pub struct Input {
     pub pos: u64,
     pub target: u64,
     pub piece: Piece,
+    pub target_piece: Piece,
 }
 
 #[derive(PartialEq)]
@@ -64,6 +68,7 @@ pub fn input(raw_input: Vec<u8>, bitboard: &[u64; 13]) -> Option<Input>{
     let target = 1 << (raw_input[3] * 8) + raw_input[2];
 
     let mut piece = Piece::None;
+    let mut target_piece = Piece::None;
     for i in 0..12 {
         if bitboard[i] & pos != 0{
             piece = match i % 6{
@@ -77,7 +82,21 @@ pub fn input(raw_input: Vec<u8>, bitboard: &[u64; 13]) -> Option<Input>{
             }
         }
     }
-    Some(Input{pos: pos, target: target, piece: piece})
+
+    for i in 0..12{
+        if bitboard[i] & target != 0{
+            target_piece = match i % 6{
+                0 => {Piece::Pawn}
+                1 => {Piece::Rook}
+                2 => {Piece::Knight}
+                3 => {Piece::Bishop}
+                4 => {Piece::Queen}
+                5 => {Piece::King}
+                _ => {Piece::None}
+            }
+        }
+    }
+    Some(Input{pos: pos, target: target, piece: piece, target_piece: target_piece})
 }
 
 //This does the exact same job as shift, but in reverse. It does assume that there is only one number on the board, but it doesn't matter in context

@@ -21,10 +21,10 @@ fn main() {
     11 is e.p. and castling
      */
     let mut bitboard = bitboard();
+
     loop{
         display_board(&bitboard);
         player(&mut bitboard, &Color::White);
-        display_board(&bitboard);
     }
 }
 
@@ -74,7 +74,9 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
             _ => {return false}
         }
     } else {
-        //castling goes here
+        if input.piece == Piece::King && input.target_piece == Piece::Rook{
+            return castle(bitboard, input, boards.0 | boards.1);
+        }
     }
     false
 }
@@ -137,8 +139,24 @@ fn diagonal_and_straight_check(input: &Input, board: u64) -> bool{
     false
 }
 
+fn castle(bitboard: &[u64; 13], input: &Input, board: u64) -> bool {
+    let can_castle: bool = (input.pos & bitboard[12] != 0) && (input.target & bitboard[12] != 0);
+    let pos = find_coords(input.pos);
+    let target = find_coords(input.target);
+    if pos.1 != target.1 {return false};
+    let displacement = target.0 - pos.0;
+    let dir = displacement.signum();
+
+    for i in 0..displacement{
+        let x = input.pos << dir * i;
+        if x & board != 0 && x & bitboard[12] == 0{return false}
+    }
+    true
+}
+
 
 fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
+    //Needs some thought to be actually good code
     let mut i = if *color == Color::White{6} else {0};
     i += match input.piece{
             Piece::Pawn => {0}
@@ -149,24 +167,35 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
             Piece::King => {5}
             _ => {12}
     };
+    let mut j = if *color == Color::White{0} else {6};
+    j += match input.target_piece{
+            Piece::Pawn => {0}
+            Piece::Rook => {1}
+            Piece::Knight => {2}
+            Piece::Bishop => {3}
+            Piece::Queen => {4}
+            Piece::King => {5}
+            _ => {12}
+    };
 
     bitboard[i] ^= input.pos;
-
-    for j in 0..12{
-        if bitboard[j] & input.target != 0{
-            println!("Hello");
-            bitboard[j] ^= input.target;
-        }
+    
+    //castling stuff
+    if input.piece == Piece::King && input.target_piece == Piece::Rook && input.pos & bitboard[12] != 0 && input.target & bitboard[12] != 0{
+        bitboard[i - 4] ^= input.target;
+        let mut dir = -1;
+        if (input.pos as i128 - input.target as i128) < 0 {dir = 1} 
+        bitboard[i] |= shift(input.pos, dir * 2);
+        bitboard[i - 4] |= shift(input.pos, dir);
+    } else {
+        bitboard[i] |= input.target;
+        bitboard[j] ^= input.target;
     }
 
-    bitboard[i] |= input.target;
-
     //This is in case there is a special state that needs to be taken care of (aka of the 13th board)
-    if bitboard[12] & input.pos != 0 {
-        bitboard[12] |= input.pos;
-        if bitboard[12] & input.target == 0 {
-            bitboard[12] |= input.target;
-        }
+    if bitboard[12] & input.pos != 0 && input.piece != Piece::Pawn{
+        bitboard[12] ^= input.pos;
+        bitboard[12] ^= input.target;
     }
 }
 
@@ -219,6 +248,6 @@ fn display_board(bitboard: &[u64; 13]){
             }
             print!("{letter}")
         }
-        println!("\n");
+        print!("\n");
     }
 }
