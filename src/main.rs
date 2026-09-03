@@ -22,6 +22,10 @@ fn main() {
      */
     let mut bitboard = bitboard();
 
+    bitboard[8] &= !(0b11111111 << 56);
+    bitboard[9] &= !(0b11111111 << 56);
+    bitboard[10] &= !(0b11111111 << 56);
+
     loop{
         display_board(&bitboard);
         player(&mut bitboard, &Color::White);
@@ -82,11 +86,15 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
 }
 
 fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u64) -> bool{
-    //This technically doesn't have a purpose yet. It should be after e.p. code and after double move code.
+    let offset = if *color == Color::Black {1} else {-1};
+    //en passant. I do need to figure out how to test this exactly
+    let left_ep = shift(input.pos, (offset * 8) - 1) == input.target && shift(input.pos, (offset * 8) - 1) & bitboard[12] != 0;
+    let right_ep = shift(input.pos, (offset * 8) + 1) == input.target && shift(input.pos, (offset * 8) + 1) & bitboard[12] != 0;
+    if (left_ep || right_ep ) && input.target_piece == Piece::None{return true}
+    
     clean_bitboard(bitboard);
 
-    //Beware, this does interact with en passant code
-    let offset = if *color == Color::Black {1} else {-1};
+    
     let temp = find_coords(input.pos);
     let correct_pos: bool = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
     if shift(input.pos, offset * 16) == input.target && correct_pos && (enemy_board & input.target) == 0 {
@@ -140,7 +148,7 @@ fn diagonal_and_straight_check(input: &Input, board: u64) -> bool{
 }
 
 fn castle(bitboard: &[u64; 13], input: &Input, board: u64) -> bool {
-    let can_castle: bool = (input.pos & bitboard[12] != 0) && (input.target & bitboard[12] != 0);
+    if (input.pos & bitboard[12] == 0) || (input.target & bitboard[12] == 0) {return false}
     let pos = find_coords(input.pos);
     let target = find_coords(input.target);
     if pos.1 != target.1 {return false};

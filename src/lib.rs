@@ -22,8 +22,6 @@ pub fn bitboard() -> [u64; 13]{
 
     //White Rook & King flags
     bitboard[12] |= 0b10010001 << 56;  
-    //The last piece of the board doesn't need to be modified since it only gets added to in special circumstances.
-    //We do need to apply it to all Rooks and Kings.
     return bitboard;
 }
 
