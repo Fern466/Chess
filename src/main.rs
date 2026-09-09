@@ -12,6 +12,7 @@ use lib::Color;
 use lib::shift;
 use lib::find_coords;
 use lib::boundary_check;
+use lib::assemble_bitmask;
 fn main() {
     /*
     Order for pieces:
@@ -20,12 +21,22 @@ fn main() {
     6-10 is white
     11 is e.p. and castling
      */
+
+    //Use to test the validity of a bitboard
+    let bruh = assemble_bitmask((3, 3), &Color::White);
+    let bruh = bruh[3];
+    for y in 0..8{
+        for x in 0..8 {
+            let mut letter = ".".black();
+            if (1 << (y * 8) + x) & bruh != 0{
+                letter = "!".white();
+            }
+            print!("{letter}")
+        }
+        print!("\n");
+    }
+
     let mut bitboard = bitboard();
-
-    bitboard[8] &= !(0b11111111 << 56);
-    bitboard[9] &= !(0b11111111 << 56);
-    bitboard[10] &= !(0b11111111 << 56);
-
     loop{
         display_board(&bitboard);
         player(&mut bitboard, &Color::White);
@@ -164,7 +175,7 @@ fn castle(bitboard: &[u64; 13], input: &Input, board: u64) -> bool {
 
 
 fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
-    //Needs some thought to be actually good code
+    //Absolutely horrendous code quality
     let mut i = if *color == Color::White{6} else {0};
     i += match input.piece{
             Piece::Pawn => {0}
@@ -213,6 +224,11 @@ fn clean_bitboard(bitboard: &mut [u64; 13]){
         let temp = 0b11111111 << 24 + (8 * i);
         bitboard[12] &= !temp;
     }
+}
+
+fn check(bitboard: &[u64; 13], color: &Color) -> Option<bool>{
+
+    None
 }
 
 //This block of code is strictly for testing purposes. It will be removed after TUI is implemented.

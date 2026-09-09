@@ -25,6 +25,50 @@ pub fn bitboard() -> [u64; 13]{
     return bitboard;
 }
 
+//If you bit shift a number over the threshold of being in the number, it just disappears. Nice.
+//It uses u8s which does have some downsides, but also make it so much easier to bitshift over a border correctly.
+const BITMASKS: [u8; 2] = [
+    0b101 << 2, //Pawn + Knight 1
+    //This is by default what black would see. To make it what white would see, bitshift -16. Also is used for knight stuff.
+    0b10001 << 1, //Knight 2
+];
+
+//Gives correct bitmasks in context to a given piece is. Mainly used for check.
+pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 5]{
+    let mut board: [u64; 5] = [0; 5];
+    let difference = ((offset.0 - 3), (offset.1 - 3));
+    //pawn
+    board[0] = shift_u8(BITMASKS[0], difference.0) as u64;
+    if *color == Color::White {board[0] = board[0] << 16}
+    //knight
+    board[1] |= shift(shift_u8(BITMASKS[0], difference.0) as u64, difference.1 * 8);
+    board[1] |= shift(shift_u8(BITMASKS[1], difference.0) as u64, 8 + difference.1 * 8);
+    board[1] |= shift(shift_u8(BITMASKS[1], difference.0) as u64, 24 + difference.1 * 8);
+    board[1] |= shift(shift_u8(BITMASKS[0], difference.0) as u64, 32 + difference.1 * 8);
+    //king
+    let temp = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)];
+    for i in 0..8{
+        board[2] |= shift(shift_u8(1, offset.0 + temp[i].0) as u64, (offset.1 + temp[i].1) * 8);
+    }
+
+    let mut lines: [u64; 4] = [0; 4];
+    //vertical, horizonal, pos diagonal, negative diagonal
+    lines[0] = 1;
+    for i in 1..8{
+        lines[0] += 1 << 8 * i;
+    }
+    lines[1] = 0b11111111;
+    board
+}
+
+fn shift_u8(num: u8, offset: i32) -> u8 {
+    if offset < 0 {
+        return num >> offset.abs();
+    } else {
+        return num << offset;
+    }
+}
+
 //This needs to be a thing since for some reason x << -1 != x >> 1. Weird.
 pub fn shift(num: u64, offset: i32) -> u64 {
     if offset < 0 {
