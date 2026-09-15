@@ -33,10 +33,11 @@ const BITMASKS: [u8; 2] = [
     0b10001 << 1, //Knight 2
 ];
 
+//Needs a particular emphasis on testing
 //Gives correct bitmasks in context to a given piece is. Mainly used for check.
-pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 5]{
-    let mut board: [u64; 5] = [0; 5];
-    let difference = ((offset.0 - 3), (offset.1 - 3));
+pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 11]{
+    let mut board: [u64; 11] = [0; 11];
+    let difference = ((offset.0 - 3), (offset.1 - 2));
     //pawn
     board[0] = shift_u8(BITMASKS[0], difference.0) as u64;
     if *color == Color::White {board[0] = board[0] << 16}
@@ -51,17 +52,37 @@ pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 5]{
         board[2] |= shift(shift_u8(1, offset.0 + temp[i].0) as u64, (offset.1 + temp[i].1) * 8);
     }
 
-    let mut lines: [u64; 4] = [0; 4];
-    //vertical, horizonal, pos diagonal, negative diagonal
-    lines[0] = 1;
-    for i in 1..8{
-        lines[0] += 1 << 8 * i;
+    let mut lines: [u64; 2] = [0; 2];
+
+    //vertical rays
+    let temp = 7 - offset.1;
+    for i in 0..8{
+            if i < temp {
+                lines[0] += 1 << 8 * i;
+            } else {
+                lines[1] += 1 << 8 * i;
+            }
     }
-    lines[1] = 0b11111111;
+    board[3] = lines[0] << offset.0;
+    board[4] = lines[1] << offset.0;
+
+    //horizontal rays
+    board[5] = (shift_u8(0b11111111, 7 - offset.0) as u64) << offset.1 * 8;
+    board[6] = (shift_u8(0b11111111, offset.0 - 7) as u64) << offset.1 * 8;
+
+    //I'm mildly baffled at how long it took me to come up with this one segment of code.
+    //diagonal rays
+    for i in 1..8{
+        board[7] |= shift(shift_u8(1, offset.0 + i) as u64, (offset.1 + i) * 8);
+        board[8] |= shift(shift_u8(1, offset.0 - i) as u64, (offset.1 - i) * 8);
+        board[9] |= shift(shift_u8(1, offset.0 - i) as u64, (offset.1 + i) * 8);
+        board[10] |= shift(shift_u8(1, offset.0 + i) as u64, (offset.1 - i) * 8);
+    }
     board
 }
 
 fn shift_u8(num: u8, offset: i32) -> u8 {
+    if offset.abs() > 7 {return 0}
     if offset < 0 {
         return num >> offset.abs();
     } else {
@@ -71,6 +92,7 @@ fn shift_u8(num: u8, offset: i32) -> u8 {
 
 //This needs to be a thing since for some reason x << -1 != x >> 1. Weird.
 pub fn shift(num: u64, offset: i32) -> u64 {
+    if offset.abs() > 63 {return 0}
     if offset < 0 {
         return num >> offset.abs();
     } else {

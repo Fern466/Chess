@@ -23,7 +23,7 @@ fn main() {
      */
 
     //Use to test the validity of a bitboard
-    let bruh = assemble_bitmask((3, 3), &Color::White);
+    let bruh = assemble_bitmask((5, 6), &Color::White);
     let bruh = bruh[3];
     for y in 0..8{
         for x in 0..8 {
@@ -226,9 +226,32 @@ fn clean_bitboard(bitboard: &mut [u64; 13]){
     }
 }
 
-fn check(bitboard: &[u64; 13], color: &Color) -> Option<bool>{
+//If true, should be processed by the checkmate function
+fn check(bitboard: &[u64; 13], color: &Color) -> bool{
+    let mut enemy = &bitboard[0..5];
+    let mut friendly = &bitboard[6..11];
+    if *color == Color::White{
+        enemy = &bitboard[6..11];
+        friendly = &bitboard[0..5];
+    }
 
-    None
+    //pawn, knight, and king
+    let bitmasks = assemble_bitmask(find_coords(friendly[5]), color);
+    if bitmasks[0] & enemy[0] != 0 ||
+    bitmasks[1] & enemy[1] != 0 ||
+    bitmasks[4] & enemy[4] != 0 
+    {return true}
+
+    let vertical_and_horizontal = bitmasks[3] | bitmasks[4] | bitmasks[5] | bitmasks[6];
+    let diagonal = bitmasks[7] | bitmasks[8] | bitmasks[9] | bitmasks[10];
+
+    let diagonal_pieces = enemy[6] | enemy[4];
+    let vertical_and_horizontal_piece = enemy[5] | enemy[3];
+
+    if vertical_and_horizontal & vertical_and_horizontal_piece != 0{
+        //do more checks here
+    }
+    false
 }
 
 //This block of code is strictly for testing purposes. It will be removed after TUI is implemented.
