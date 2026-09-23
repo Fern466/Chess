@@ -40,7 +40,7 @@ pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 11]{
     let difference = ((offset.0 - 3), (offset.1 - 2));
     //pawn
     board[0] = shift_u8(BITMASKS[0], difference.0) as u64;
-    if *color == Color::White {board[0] = board[0] << 16}
+    if *color == Color::White {board[0] = board[0] << 24}
     //knight
     board[1] |= shift(shift_u8(BITMASKS[0], difference.0) as u64, difference.1 * 8);
     board[1] |= shift(shift_u8(BITMASKS[1], difference.0) as u64, 8 + difference.1 * 8);
@@ -175,5 +175,14 @@ pub fn find_coords(board: u64) -> (i32, i32){
 pub fn boundary_check(x: i32) -> bool{
     if x <= 7 && x >= 0 {return true};
     false
+}
+
+pub fn fill_1s(mut start: i32, mut stop: i32) -> u64{
+    let mut num: u64 = 0;
+    while start != stop {
+        num += 1 << start;
+        start = start + (stop - start).signum();
+    }
+    num
 }
 

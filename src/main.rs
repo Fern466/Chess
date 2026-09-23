@@ -13,6 +13,7 @@ use lib::shift;
 use lib::find_coords;
 use lib::boundary_check;
 use lib::assemble_bitmask;
+use lib::fill_1s;
 fn main() {
     /*
     Order for pieces:
@@ -23,8 +24,8 @@ fn main() {
      */
 
     //Use to test the validity of a bitboard
-    let bruh = assemble_bitmask((5, 6), &Color::White);
-    let bruh = bruh[3];
+    let bruh = assemble_bitmask((4, 4), &Color::White);
+    let bruh = bruh[1];
     for y in 0..8{
         for x in 0..8 {
             let mut letter = ".".black();
@@ -228,28 +229,66 @@ fn clean_bitboard(bitboard: &mut [u64; 13]){
 
 //If true, should be processed by the checkmate function
 fn check(bitboard: &[u64; 13], color: &Color) -> bool{
+    //creates seperate boards for easier and clearer checking
     let mut enemy = &bitboard[0..5];
     let mut friendly = &bitboard[6..11];
+    let mut all_pieces = bitboard[0];
+    for i in 1..12{all_pieces += bitboard[i]}
+    
     if *color == Color::White{
         enemy = &bitboard[6..11];
         friendly = &bitboard[0..5];
     }
 
-    //pawn, knight, and king
+    //Pawn, Knight & King
     let bitmasks = assemble_bitmask(find_coords(friendly[5]), color);
     if bitmasks[0] & enemy[0] != 0 ||
     bitmasks[1] & enemy[1] != 0 ||
     bitmasks[4] & enemy[4] != 0 
     {return true}
 
+    //Bishop, Rook & Queen
     let vertical_and_horizontal = bitmasks[3] | bitmasks[4] | bitmasks[5] | bitmasks[6];
     let diagonal = bitmasks[7] | bitmasks[8] | bitmasks[9] | bitmasks[10];
 
     let diagonal_pieces = enemy[6] | enemy[4];
-    let vertical_and_horizontal_piece = enemy[5] | enemy[3];
+    let vertical_and_horizontal_pieces = enemy[5] | enemy[3];
 
-    if vertical_and_horizontal & vertical_and_horizontal_piece != 0{
-        //do more checks here
+    //First check that an enemy piece is in a place where it could check without obstructions. Then iterate to find the specific mask. 
+    if vertical_and_horizontal & vertical_and_horizontal_pieces != 0{
+        for i in 3..7{
+            if bitmasks[i] & vertical_and_horizontal_pieces != 0 {
+                //The big problem with this is figuring out how to do it for both directions, since the positions could either be greater or less than king. 
+                //This does work, but feels a bit inelegant
+                let piece = bitmasks[i] & vertical_and_horizontal_pieces;
+                let mut x: u64 = 0;
+                if piece > friendly[5] {
+                    let j = piece.trailing_zeros();
+                    x = fill_1s(63, j.try_into().unwrap());
+                } else {
+                    let j = 64 - piece.leading_zeros();
+                    x = fill_1s(0, j.try_into().unwrap());
+                };
+                if (x & bitmasks[i]) & all_pieces != 0 {return true}
+            }
+        }
+    } else if diagonal & diagonal_pieces != 0 {
+        for i in 7..11{
+            if bitmasks[i] & diagonal_pieces != 0 {
+                //The big problem with this is figuring out how to do it for both directions, since the positions could either be greater or less than king. 
+                //This does work, but feels a bit inelegant
+                let piece = bitmasks[i] & diagonal_pieces;
+                let mut x: u64 = 0;
+                if piece > friendly[5] {
+                    let j = piece.trailing_zeros();
+                    x = fill_1s(63, j.try_into().unwrap());
+                } else {
+                    let j = 64 - piece.leading_zeros();
+                    x = fill_1s(0, j.try_into().unwrap());
+                };
+                if (x & bitmasks[i]) & all_pieces != 0 {return true}
+            }
+        }
     }
     false
 }
@@ -296,5 +335,24 @@ fn display_board(bitboard: &[u64; 13]){
             print!("{letter}")
         }
         print!("\n");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    //lib.rs code
+    #[test]
+    fn test_assemble_bitmasks() {
+        let bitmasks = assemble_bitmask((4, 4), &Color::White);
+        //pawn
+        assert_eq!(bitmasks[0], 0b101 << 27);
+        //knight
+        let knight: u64 = (0b101 << 19) | (0b10001 << 26) | (0b10001 << 42) | (0b101 << 51);
+        assert_eq!(bitmasks[1], knight);
+        //king
+        let king: u64 = (0b111 << 27) | (0b101 << 35) | (0b111 << 43);
+        assert_eq!(bitmasks[2], king);
     }
 }
