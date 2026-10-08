@@ -17,8 +17,8 @@ pub fn bitboard() -> [u64; 13]{
     bitboard[7] = 0b10000001 << 56;
     bitboard[8] = 0b01000010 << 56;
     bitboard[9] = 0b00100100 << 56;
-    bitboard[10] = 0b00001000 << 56;
-    bitboard[11] = 0b00010000 << 56;
+    bitboard[10] = 0b00001000 << 56; //king
+    bitboard[11] = 0b00010000 << 56; //queen
 
     //White Rook & King flags
     bitboard[12] |= 0b10010001 << 56;  
@@ -48,6 +48,7 @@ pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 11]{
     board[1] |= shift(shift_u8(BITMASKS[0], difference.0) as u64, 32 + difference.1 * 8);
     //king
     let temp = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)];
+    println!();
     for i in 0..8{
         board[2] |= shift(shift_u8(1, offset.0 + temp[i].0) as u64, (offset.1 + temp[i].1) * 8);
     }
@@ -67,8 +68,8 @@ pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 11]{
     board[4] = lines[1] << offset.0;
 
     //horizontal rays
-    board[5] = (shift_u8(0b11111111, 7 - offset.0) as u64) << offset.1 * 8;
-    board[6] = (shift_u8(0b11111111, offset.0 - 7) as u64) << offset.1 * 8;
+    board[5] = shift(shift_u8(0b11111111, 7 - offset.0) as u64, offset.1 * 8);
+    board[6] = shift(shift_u8(0b11111111, offset.0 - 7) as u64, offset.1 * 8);
 
     //I'm mildly baffled at how long it took me to come up with this one segment of code.
     //diagonal rays
@@ -81,7 +82,7 @@ pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 11]{
     board
 }
 
-fn shift_u8(num: u8, offset: i32) -> u8 {
+pub fn shift_u8(num: u8, offset: i32) -> u8 {
     if offset.abs() > 7 {return 0}
     if offset < 0 {
         return num >> offset.abs();

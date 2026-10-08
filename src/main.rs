@@ -14,6 +14,7 @@ use lib::find_coords;
 use lib::boundary_check;
 use lib::assemble_bitmask;
 use lib::fill_1s;
+use lib::shift_u8;
 fn main() {
     /*
     Order for pieces:
@@ -25,7 +26,7 @@ fn main() {
 
     //Use to test the validity of a bitboard
     let bruh = assemble_bitmask((4, 4), &Color::White);
-    let bruh = bruh[1];
+    let bruh = bruh[0];
     for y in 0..8{
         for x in 0..8 {
             let mut letter = ".".black();
@@ -46,6 +47,7 @@ fn main() {
 
 fn player(bitboard: &mut [u64; 13], color: &Color){
     //this function gets player input and proccesses it to prove its validity, then changes the bitboard
+    //needs some changes to be in compliance with the checking algorithm
     let input = get_input(bitboard);
     println!("{:?}", input.piece);
     if validate_input(bitboard, &input, color) {
@@ -99,14 +101,13 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
 
 fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u64) -> bool{
     let offset = if *color == Color::Black {1} else {-1};
-    //en passant. I do need to figure out how to test this exactly
-    let left_ep = shift(input.pos, (offset * 8) - 1) == input.target && shift(input.pos, (offset * 8) - 1) & bitboard[12] != 0;
-    let right_ep = shift(input.pos, (offset * 8) + 1) == input.target && shift(input.pos, (offset * 8) + 1) & bitboard[12] != 0;
+    //this code is jank. I'm just lazy and don't want to have to find the exact enemy pawns so I just get a list of all the pawns and compare it to enemy board.
+    let left_ep = shift(input.pos, -1) & (enemy_board & (bitboard[0] | bitboard[6])) != 0 && shift(input.pos,-1) & bitboard[12] != 0;
+    let right_ep = shift(input.pos, 1) & (enemy_board & (bitboard[0] | bitboard[6])) != 0 && shift(input.pos, 1) & bitboard[12] != 0;
     if (left_ep || right_ep ) && input.target_piece == Piece::None{return true}
     
     clean_bitboard(bitboard);
 
-    
     let temp = find_coords(input.pos);
     let correct_pos: bool = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
     if shift(input.pos, offset * 16) == input.target && correct_pos && (enemy_board & input.target) == 0 {
@@ -183,8 +184,8 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
             Piece::Rook => {1}
             Piece::Knight => {2}
             Piece::Bishop => {3}
-            Piece::Queen => {4}
-            Piece::King => {5}
+            Piece::Queen => {5}
+            Piece::King => {4}
             _ => {12}
     };
     let mut j = if *color == Color::White{0} else {6};
@@ -193,8 +194,8 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
             Piece::Rook => {1}
             Piece::Knight => {2}
             Piece::Bishop => {3}
-            Piece::Queen => {4}
-            Piece::King => {5}
+            Piece::Queen => {5}
+            Piece::King => {4}
             _ => {12}
     };
 
@@ -202,11 +203,10 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
     
     //castling stuff
     if input.piece == Piece::King && input.target_piece == Piece::Rook && input.pos & bitboard[12] != 0 && input.target & bitboard[12] != 0{
-        bitboard[i - 4] ^= input.target;
-        let mut dir = -1;
-        if (input.pos as i128 - input.target as i128) < 0 {dir = 1} 
-        bitboard[i] |= shift(input.pos, dir * 2);
-        bitboard[i - 4] |= shift(input.pos, dir);
+        bitboard[i - 3] ^= input.target;
+        let dir = (input.target as i128 - input.pos as i128).signum() as i32;
+        bitboard[i] = shift(input.pos, dir * 2);
+        bitboard[i - 3] ^= shift(input.pos, dir);
     } else {
         bitboard[i] |= input.target;
         bitboard[j] ^= input.target;
@@ -230,30 +230,27 @@ fn clean_bitboard(bitboard: &mut [u64; 13]){
 //If true, should be processed by the checkmate function
 fn check(bitboard: &[u64; 13], color: &Color) -> bool{
     //creates seperate boards for easier and clearer checking
-    let mut enemy = &bitboard[0..5];
-    let mut friendly = &bitboard[6..11];
+    let enemy = if *color == Color::White{&bitboard[0..6]} else {&bitboard[7..12]};
+    let friendly = if *color == Color::Black{&bitboard[7..12]} else {&bitboard[0..6]};
     let mut all_pieces = bitboard[0];
-    for i in 1..12{all_pieces += bitboard[i]}
-    
-    if *color == Color::White{
-        enemy = &bitboard[6..11];
-        friendly = &bitboard[0..5];
-    }
+    for i in 0..13{all_pieces += bitboard[i]}
+    let king = if *color == Color::White{bitboard[10]} else {bitboard[4]};
 
     //Pawn, Knight & King
-    let bitmasks = assemble_bitmask(find_coords(friendly[5]), color);
+    let bitmasks = assemble_bitmask(find_coords(king), color);
     if bitmasks[0] & enemy[0] != 0 ||
-    bitmasks[1] & enemy[1] != 0 ||
-    bitmasks[4] & enemy[4] != 0 
+    bitmasks[1] & enemy[2] != 0 ||
+    bitmasks[2] & enemy[4] != 0 
     {return true}
-
+    
     //Bishop, Rook & Queen
     let vertical_and_horizontal = bitmasks[3] | bitmasks[4] | bitmasks[5] | bitmasks[6];
     let diagonal = bitmasks[7] | bitmasks[8] | bitmasks[9] | bitmasks[10];
 
-    let diagonal_pieces = enemy[6] | enemy[4];
-    let vertical_and_horizontal_pieces = enemy[5] | enemy[3];
+    let diagonal_pieces = enemy[3] | enemy[5];
+    let vertical_and_horizontal_pieces = enemy[1] | enemy[5];
 
+    
     //First check that an enemy piece is in a place where it could check without obstructions. Then iterate to find the specific mask. 
     if vertical_and_horizontal & vertical_and_horizontal_pieces != 0{
         for i in 3..7{
@@ -262,31 +259,27 @@ fn check(bitboard: &[u64; 13], color: &Color) -> bool{
                 //This does work, but feels a bit inelegant
                 let piece = bitmasks[i] & vertical_and_horizontal_pieces;
                 let mut x: u64 = 0;
-                if piece > friendly[5] {
-                    let j = piece.trailing_zeros();
-                    x = fill_1s(63, j.try_into().unwrap());
+                if piece > king {
+                    x = fill_1s((king.trailing_zeros() + 1) as i32, (piece.trailing_zeros() - 1) as i32);
                 } else {
-                    let j = 64 - piece.leading_zeros();
-                    x = fill_1s(0, j.try_into().unwrap());
+                    x = fill_1s((piece.leading_zeros()) as i32, (king.trailing_zeros() - 1) as i32);
                 };
-                if (x & bitmasks[i]) & all_pieces != 0 {return true}
+                //I put this XOR statement here so it didn't try to include the threatening pieces. I think that's why it wasn't working before?
+                if (x & bitmasks[i]) & (all_pieces ^ piece) == 0 {return true}
             }
         }
     } else if diagonal & diagonal_pieces != 0 {
         for i in 7..11{
             if bitmasks[i] & diagonal_pieces != 0 {
-                //The big problem with this is figuring out how to do it for both directions, since the positions could either be greater or less than king. 
-                //This does work, but feels a bit inelegant
+                //this code is less braindead than before
                 let piece = bitmasks[i] & diagonal_pieces;
                 let mut x: u64 = 0;
-                if piece > friendly[5] {
-                    let j = piece.trailing_zeros();
-                    x = fill_1s(63, j.try_into().unwrap());
+                if piece > king {
+                    x = fill_1s((king.trailing_zeros() + 1) as i32, (piece.trailing_zeros() - 1) as i32);
                 } else {
-                    let j = 64 - piece.leading_zeros();
-                    x = fill_1s(0, j.try_into().unwrap());
+                    x = fill_1s((piece.leading_zeros()) as i32, (king.trailing_zeros() - 1) as i32);
                 };
-                if (x & bitmasks[i]) & all_pieces != 0 {return true}
+                if (x & bitmasks[i]) & (all_pieces ^ piece) == 0 {return true}
             }
         }
     }
@@ -346,13 +339,196 @@ mod tests {
     #[test]
     fn test_assemble_bitmasks() {
         let bitmasks = assemble_bitmask((4, 4), &Color::White);
-        //pawn
+
         assert_eq!(bitmasks[0], 0b101 << 27);
-        //knight
+
         let knight: u64 = (0b101 << 19) | (0b10001 << 26) | (0b10001 << 42) | (0b101 << 51);
         assert_eq!(bitmasks[1], knight);
-        //king
+
         let king: u64 = (0b111 << 27) | (0b101 << 35) | (0b111 << 43);
         assert_eq!(bitmasks[2], king);
+
+        let rook: u64 = (1 << 4) | (1 << 12) | (1 << 20) | (1 << 28) | (0b11111111 << 32) | (1 << 44) | (1 << 52) | (1 << 60);
+        assert_eq!(bitmasks[3] | bitmasks[4] | bitmasks[5] | bitmasks[6], rook);
+
+        let bishop: u64 = 1 | (0b010000010 << 8) | (0b001000100 << 16) | (0b000101000 << 24) | (0b000101000 << 40) | (0b01000100 << 48) | (0b10000010<< 56);
+        assert_eq!(bitmasks[7] | bitmasks[8] | bitmasks[9] | bitmasks[10], bishop);
+
+        let queen: u64 = bishop | rook;
+        assert_eq!(bitmasks[3] | bitmasks[4] | bitmasks[5] | bitmasks[6] | bitmasks[7] | bitmasks[8] | bitmasks[9] | bitmasks[10], queen);
+    }
+
+    //some of these are probably unnecessary to test, but I'll do it anyways
+    #[test]
+    fn test_shift_u8(){
+        assert_eq!(shift_u8(8, 20), 0);
+        assert_eq!(shift(2, 2), 8);
+        assert_eq!(shift(8, -2), 2);
+    }
+
+    #[test]
+    fn test_shift(){
+        assert_eq!(shift(2, 78), 0);
+        assert_eq!(shift(2, 32), 8589934592);
+        assert_eq!(shift(8589934592, -32), 2);
+    }
+
+    #[test]
+    fn test_input(){
+        let bitboard = bitboard();
+        let input = input(vec![0, 0, 5, 7], &bitboard).unwrap();
+        assert!(input.piece == Piece::Rook, "Incorrect piece at location");
+        assert!(input.target_piece == Piece::Bishop, "Incorrect target piece at location");
+        assert!(input.pos == 1, "Incorrect position recorded");
+        assert!(input.target == 1 << 61, "Incorrect target positon recorded");
+    }
+
+    #[test]
+    fn test_find_coords(){
+        assert_eq!(find_coords(1 << (6 * 8) + 2), (2, 6));
+        assert_eq!(find_coords(1 << (1 * 8) + 7), (7, 1));
+    }
+
+    #[test]
+    fn test_fill_1s(){
+        let mut x = 0;
+        for i in 0..3{
+            x += 0b11111111 << (i * 8);
+        }
+        assert_eq!(fill_1s(0, 24), x);
+
+        let mut x = 0;
+        for i in 4..7{
+            x += 0b11111111 << (i * 8);
+        }
+        assert_eq!(fill_1s(32, 56), x);
+    }
+
+    //main.rs
+    //This test should have a lot of tests
+    #[test]
+    fn test_validate_input(){
+        let mut bitboard = bitboard();
+        
+        {//null input
+            let input = input(vec![0, 4, 7, 7], &bitboard).unwrap();
+            assert!(!validate_input(&mut bitboard, &input, &Color::White), "Null input reported as true");
+        }{//pawn
+            let input = input(vec![7, 6, 7, 4], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal pawn move reported as false");
+        }{//knight
+            let input = input(vec![1, 7, 0, 5], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal knight move reported as false");
+        }{//queen unsuccessful
+            let input = input(vec![3, 7, 3, 1], &bitboard).unwrap();
+            assert!(!validate_input(&mut bitboard, &input, &Color::White), "Illegal queen move reported as true"); 
+        }{//king unsucessful
+            let input = input(vec![4, 7, 4, 6], &bitboard).unwrap();
+            assert!(!validate_input(&mut bitboard, &input, &Color::White), "Illegal king move reported as true"); 
+        }
+
+        //modified board for king, queen, rook & bishop
+        bitboard[6] = 0;
+        {//king
+            let input = input(vec![4, 7, 3, 6], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal king move reported as false"); 
+        }{//queen
+            let input = input(vec![3, 7, 0, 4], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal queen move reported as false"); 
+        }{//rook
+            let input = input(vec![0, 7, 0, 4], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal rook move reported as false"); 
+        }{//bishop
+            let input = input(vec![2, 7, 0, 5], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal bishop move reported as false"); 
+        }{//pawn attacking
+            bitboard[6] += 1 << 16;
+            let input = input(vec![0, 2, 1, 1], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal pawn attack reported as false"); 
+        }{//e.p. pawn
+            bitboard[6] += 1 << 36;
+            bitboard[0] += 1 << 37;
+            bitboard[12] += 1 << 37;
+            let input = input(vec![4, 4, 5, 3], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal en passant reported as false"); 
+        }{//illegal castling
+            let input = input(vec![0, 7, 4, 7], &bitboard).unwrap();
+            assert!(!validate_input(&mut bitboard, &input, &Color::White), "Illegal castling move reported as true"); 
+        }{//castling
+            bitboard[8] = 0;
+            bitboard[9] = 0;
+            bitboard[12] = (1 << 60) + (1 << 63);
+            let input = input(vec![4, 7, 7, 7], &bitboard).unwrap();
+            assert!(validate_input(&mut bitboard, &input, &Color::White), "Legal castling move reported as false"); 
+        }
+    }
+
+    #[test]
+    fn test_move_piece(){
+        let mut bitboard = bitboard();
+        //pawn
+        let player_input = input(vec![7, 6, 7, 4], &bitboard).unwrap();
+        move_piece(&mut bitboard, player_input, &Color::White);
+        assert!(bitboard[6] & (1 << 39) != 0, "Pawn move reported as incorrect");
+        //knight
+        let player_input = input(vec![1, 7, 0, 5], &bitboard).unwrap();
+        move_piece(&mut bitboard, player_input, &Color::White);
+        assert!(bitboard[8] & (1 << 40) != 0, "Knight move reported as incorrect");
+        //e.p.
+        bitboard[6] += 1 << 36;
+        bitboard[0] += 1 << 37;
+        bitboard[12] += 1 << 37;
+        let player_input = input(vec![4, 4, 5, 3], &bitboard).unwrap();
+        move_piece(&mut bitboard, player_input, &Color::White);
+        assert!(bitboard[6] & (1 << 29) != 0, "Legal en passant reported as false");        
+        //castling
+        bitboard[8] = 0;
+        bitboard[9] = 0;
+        bitboard[12] = (1 << 60) + (1 << 63);
+        let player_input = input(vec![4, 7, 7, 7], &bitboard).unwrap();
+        move_piece(&mut bitboard, player_input, &Color::White);
+        assert!(bitboard[10] & (1 << 62) != 0 && bitboard[7] & (1 << 61) != 0, "Legal castling move reported as false"); 
+    }
+
+    #[test]
+    fn test_check(){
+        let mut board: [u64; 13] = [0u64; 13];
+        //pawn
+        board[10] += 1 << 36;
+        board[0] += 1 << 27;
+        assert!(check(&board, &Color::White), "Correct pawn move incorrect");
+        //knight
+        board[0] = 0;
+        board[2] += 1 << 21;
+        assert!(check(&board, &Color::White), "Correct knight move incorrect");
+        //king
+        board[2] = 0;
+        board[4] += 1 << 44; 
+        assert!(check(&board, &Color::White), "Correct king move incorrect");
+        //king incorrect
+        board[4] = 0;
+        board[4] += 1 << 50; 
+        assert!(!check(&board, &Color::White), "Incorrect king move correct");
+        //needs very rigorous checking since the code for this is particularly tricky and stupid section of code
+        //queen incorrect (obstruction) diagonal
+        board[4] = 0;
+        board[2] += 1 << 45;
+        board[5] += 1 << 54;
+        assert!(!check(&board, &Color::White), "Incorrect queen move correct");
+        //queen incorrect (obstruction) vertical
+        board[5] = 0;
+        board[2] = 0;
+        board[2] += 1 << 44;
+        board[5] += 1 << 52;
+        assert!(!check(&board, &Color::White), "Incorrect queen move correct");
+        //queen correct diagonal
+        board[5] = 0;
+        board[2] = 0;
+        board[5] += 1 << 18;
+        assert!(check(&board, &Color::White), "Correct queen move incorrect (diagonal)");
+        //queen correct horizontal
+        board[5] = 0;
+        board[5] += 1 << 32;
+        assert!(check(&board, &Color::White), "Correct queen move incorrect (horizontal)");
     }
 }
