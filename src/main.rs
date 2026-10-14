@@ -59,16 +59,15 @@ const KING: [(i32, i32); 8] = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1
 fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> bool{
     //first will be friendlies, last enemies
     let mut boards = (0, 0);
-    for i in 0..12{
-        if i < 6 && *color == Color::Black{boards.0 |= bitboard[i]} else {boards.1 |= bitboard[i]}
-        if i > 5 && *color == Color::White{boards.0 |= bitboard[i]} else {boards.1 |= bitboard[i]}
-    }
-
+    let white = bitboard[0] | bitboard[1] | bitboard[2] | bitboard[3] | bitboard[4] | bitboard[5];
+    let black = bitboard[6] | bitboard[7] | bitboard[8] | bitboard[9] | bitboard[10] | bitboard[11];
+    boards.0 = if *color == Color::White{white} else {black};
+    boards.1 = if *color == Color::White{black} else {white};
 
     //This if statement is just a "gatekeeper" since otherwise we'd need to check this later
     if boards.0 & input.target == 0{
         match input.piece {
-            Piece::Pawn => {return pawn(bitboard, input, color, &boards.1)}
+            Piece::Pawn => {return pawn(bitboard, input, color, &boards.1, &boards.0)}
             Piece::Knight => {
                 clean_bitboard(bitboard);
                 return knight(input)
@@ -99,28 +98,34 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
     false
 }
 
-fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u64) -> bool{
+fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u64, friendly_board: &u64) -> bool{
     let offset = if *color == Color::Black {1} else {-1};
+    let x = find_coords(input.pos);
+    let not_overhead = |x: i32, i: i32| if (x + i) >= 0 && (x + i) <= 7 {i} else {0};
     //this code is jank. I'm just lazy and don't want to have to find the exact enemy pawns so I just get a list of all the pawns and compare it to enemy board.
-    let left_ep = shift(input.pos, -1) & (enemy_board & (bitboard[0] | bitboard[6])) != 0 && shift(input.pos,-1) & bitboard[12] != 0;
-    let right_ep = shift(input.pos, 1) & (enemy_board & (bitboard[0] | bitboard[6])) != 0 && shift(input.pos, 1) & bitboard[12] != 0;
+    let enemy_pawn = if *color == Color::White {bitboard[0]} else {bitboard[6]};
+    let left_ep = shift(input.pos, not_overhead(x.0, -1)) & (enemy_board & enemy_pawn) != 0 && shift(input.pos,-1) & bitboard[12] != 0;
+    let left_ep = left_ep && shift(input.pos, (offset * 8) + not_overhead(x.0, -1)) == input.target;
+    let right_ep = shift(input.pos, not_overhead(x.0, 1)) & (enemy_board & enemy_pawn) != 0 && shift(input.pos, 1) & bitboard[12] != 0;
+    let right_ep = right_ep && shift(input.pos, (offset * 8) + not_overhead(x.0, 1)) == input.target;
     if (left_ep || right_ep ) && input.target_piece == Piece::None{return true}
     
     clean_bitboard(bitboard);
 
     let temp = find_coords(input.pos);
-    let correct_pos: bool = (temp.0 == 1 || *color == Color::Black) || (temp.0 == 6 || *color == Color::White);
-    if shift(input.pos, offset * 16) == input.target && correct_pos && (enemy_board & input.target) == 0 {
+    let correct_pos: bool = (temp.1 == 1 && *color == Color::Black) || (temp.1 == 6 && *color == Color::White);
+
+    if shift(input.pos, offset * 16) == input.target && correct_pos && (enemy_board & input.target) == 0 && (shift(input.pos, offset * 8) & (enemy_board & friendly_board)) == 0 {
         bitboard[12] |= input.target;
         return true;
     }    
     if shift(input.pos, offset * 8) == input.target && (enemy_board & input.target) == 0 {return true}
-    if shift(input.pos, (offset * 8) + 1) == input.target && (enemy_board & input.target) != 0 {return true}
-    if shift(input.pos, (offset * 8) - 1) == input.target && (enemy_board & input.target) != 0 {return true}
+    if shift(input.pos, (offset * 8) + not_overhead(x.0, 1)) == input.target && (enemy_board & input.target) != 0 {return true}
+    if shift(input.pos, (offset * 8) + not_overhead(x.0, -1)) == input.target && (enemy_board & input.target) != 0 {return true}
     false
 }
 
-const KNIGHT_TRANSFORM: [(i32, i32); 8] = [(2, 1), (1, 2), (2, -1), (1 , -2), (-2, 1), (-1, -2), (-2, 1), (2, -1)];
+const KNIGHT_TRANSFORM: [(i32, i32); 8] = [(2, 1), (1, 2), (2, -1), (1 , -2), (-2, -1), (-1, -2), (-2, 1), (-1, 2)];
 fn knight(input: &Input) -> bool{
     //this converts the bitboards to an x, y format since it becomes much easier to check them
     for i in 0..8{
@@ -178,6 +183,8 @@ fn castle(bitboard: &[u64; 13], input: &Input, board: u64) -> bool {
 
 fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
     //Absolutely horrendous code quality
+    let mut board: u64 = 0;
+    for i in 0..13{board |= bitboard[i]}
     let mut i = if *color == Color::White{6} else {0};
     i += match input.piece{
             Piece::Pawn => {0}
@@ -196,7 +203,7 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
             Piece::Bishop => {3}
             Piece::Queen => {5}
             Piece::King => {4}
-            _ => {12}
+            _ => {255}
     };
 
     bitboard[i] ^= input.pos;
@@ -209,7 +216,14 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
         bitboard[i - 3] ^= shift(input.pos, dir);
     } else {
         bitboard[i] |= input.target;
-        bitboard[j] ^= input.target;
+        if j < 255 {bitboard[j] ^= input.target};
+    }
+
+    //e.p.
+    if input.target & board == 0{
+        let x = if *color == Color::White{-1} else {1};
+        let z = if *color == Color::White{6} else {0};
+        bitboard[z] ^= shift(input.target, x * 8);
     }
 
     //This is in case there is a special state that needs to be taken care of (aka of the 13th board)
@@ -221,8 +235,8 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
 
 //Cleans the pawn part of the 13th board
 fn clean_bitboard(bitboard: &mut [u64; 13]){
-    for i in 0..5{
-        let temp = 0b11111111 << 24 + (8 * i);
+    for i in 3..6{
+        let temp = 0b11111111 << (8 * i);
         bitboard[12] &= !temp;
     }
 }
@@ -232,7 +246,7 @@ fn check(bitboard: &[u64; 13], color: &Color) -> bool{
     //creates seperate boards for easier and clearer checking
     let enemy = if *color == Color::White{&bitboard[0..6]} else {&bitboard[7..12]};
     let friendly = if *color == Color::Black{&bitboard[7..12]} else {&bitboard[0..6]};
-    let mut all_pieces = bitboard[0];
+    let mut all_pieces: u64 = 0;
     for i in 0..13{all_pieces += bitboard[i]}
     let king = if *color == Color::White{bitboard[10]} else {bitboard[4]};
 
@@ -315,7 +329,7 @@ fn get_input(bitboard: &[u64; 13]) -> Input {
 //Again, temporary.
 fn display_board(bitboard: &[u64; 13]){
     //can't put these as constants for some reason
-    let pieces: [ColoredString; 12] = ["P".black(), "R".black(), "K".black(), "B".black(), "Q".black(), "$".black(), "P".white(), "R".white(), "K".white(), "B".white(), "Q".white(), "$".white()];
+    let pieces: [ColoredString; 12] = ["P".black(), "R".black(), "K".black(), "B".black(), "$".black(), "Q".black(), "P".white(), "R".white(), "K".white(), "B".white(), "$".white(), "Q".white()];
 
     for y in 0..8{
         for x in 0..8 {
