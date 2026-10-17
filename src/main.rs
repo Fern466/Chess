@@ -59,8 +59,8 @@ const KING: [(i32, i32); 8] = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1
 fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> bool{
     //first will be friendlies, last enemies
     let mut boards = (0, 0);
-    let white = bitboard[0] | bitboard[1] | bitboard[2] | bitboard[3] | bitboard[4] | bitboard[5];
-    let black = bitboard[6] | bitboard[7] | bitboard[8] | bitboard[9] | bitboard[10] | bitboard[11];
+    let black = bitboard[0] | bitboard[1] | bitboard[2] | bitboard[3] | bitboard[4] | bitboard[5];
+    let white = bitboard[6] | bitboard[7] | bitboard[8] | bitboard[9] | bitboard[10] | bitboard[11];
     boards.0 = if *color == Color::White{white} else {black};
     boards.1 = if *color == Color::White{black} else {white};
 
@@ -101,13 +101,19 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
 fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u64, friendly_board: &u64) -> bool{
     let offset = if *color == Color::Black {1} else {-1};
     let x = find_coords(input.pos);
-    let not_overhead = |x: i32, i: i32| if (x + i) >= 0 && (x + i) <= 7 {i} else {0};
+    let not_overhead = |x: i32, i: i32| if (x + i) >= 0 && (x + i) <= 7 {false} else {true};
     //this code is jank. I'm just lazy and don't want to have to find the exact enemy pawns so I just get a list of all the pawns and compare it to enemy board.
     let enemy_pawn = if *color == Color::White {bitboard[0]} else {bitboard[6]};
-    let left_ep = shift(input.pos, not_overhead(x.0, -1)) & (enemy_board & enemy_pawn) != 0 && shift(input.pos,-1) & bitboard[12] != 0;
-    let left_ep = left_ep && shift(input.pos, (offset * 8) + not_overhead(x.0, -1)) == input.target;
-    let right_ep = shift(input.pos, not_overhead(x.0, 1)) & (enemy_board & enemy_pawn) != 0 && shift(input.pos, 1) & bitboard[12] != 0;
-    let right_ep = right_ep && shift(input.pos, (offset * 8) + not_overhead(x.0, 1)) == input.target;
+    let mut left_ep = false;
+    if not_overhead(x.0, -1){
+        left_ep = shift(input.pos, -1) & (enemy_board | enemy_pawn) != 0 && shift(input.pos,-1) & bitboard[12] != 0;
+        left_ep = left_ep && shift(input.pos, (offset * 8) - 1) == input.target;
+    }
+    let mut right_ep = false;
+    if not_overhead(x.0, 1){
+        right_ep = shift(input.pos, 1) & (enemy_board | enemy_pawn) != 0 && shift(input.pos, 1) & bitboard[12] != 0;
+        right_ep = right_ep && shift(input.pos, (offset * 8) +  1) == input.target;
+    }
     if (left_ep || right_ep ) && input.target_piece == Piece::None{return true}
     
     clean_bitboard(bitboard);
@@ -120,8 +126,8 @@ fn pawn(bitboard: &mut [u64; 13], input: &Input, color: &Color, enemy_board: &u6
         return true;
     }    
     if shift(input.pos, offset * 8) == input.target && (enemy_board & input.target) == 0 {return true}
-    if shift(input.pos, (offset * 8) + not_overhead(x.0, 1)) == input.target && (enemy_board & input.target) != 0 {return true}
-    if shift(input.pos, (offset * 8) + not_overhead(x.0, -1)) == input.target && (enemy_board & input.target) != 0 {return true}
+    if shift(input.pos, (offset * 8) + 1) == input.target && (enemy_board & input.target) != 0 && not_overhead(x.0, 1) {return true}
+    if shift(input.pos, (offset * 8) - 1) == input.target && (enemy_board & input.target) != 0 && not_overhead(x.0, -1) {return true}
     false
 }
 

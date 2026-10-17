@@ -141,8 +141,8 @@ pub fn input(raw_input: Vec<u8>, bitboard: &[u64; 13]) -> Option<Input>{
                 1 => {Piece::Rook}
                 2 => {Piece::Knight}
                 3 => {Piece::Bishop}
-                4 => {Piece::Queen}
-                5 => {Piece::King}
+                4 => {Piece::King}
+                5 => {Piece::Queen}
                 _ => {Piece::None}
             }
         }
@@ -155,8 +155,8 @@ pub fn input(raw_input: Vec<u8>, bitboard: &[u64; 13]) -> Option<Input>{
                 1 => {Piece::Rook}
                 2 => {Piece::Knight}
                 3 => {Piece::Bishop}
-                4 => {Piece::Queen}
-                5 => {Piece::King}
+                4 => {Piece::King}
+                5 => {Piece::Queen}
                 _ => {Piece::None}
             }
         }
