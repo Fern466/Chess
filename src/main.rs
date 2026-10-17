@@ -45,14 +45,16 @@ fn main() {
     }
 }
 
-fn player(bitboard: &mut [u64; 13], color: &Color){
-    //this function gets player input and proccesses it to prove its validity, then changes the bitboard
-    //needs some changes to be in compliance with the checking algorithm
-    let input = get_input(bitboard);
-    println!("{:?}", input.piece);
-    if validate_input(bitboard, &input, color) {
-        move_piece(bitboard, input, color);
-    } else {player(bitboard, color)}
+fn player(bitboard: &mut [u64; 13], color: &Color) {
+    loop {
+        let input = get_input(bitboard);
+        let mut trial = *bitboard;
+        if validate_input(&mut trial, &input, color) {
+            *bitboard = trial;
+            move_piece(bitboard, input, color);
+            return;
+        }
+    }
 }
 
 const KING: [(i32, i32); 8] = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)];
@@ -92,7 +94,7 @@ fn validate_input(bitboard: &mut [u64; 13], input: &Input, color: &Color) -> boo
         }
     } else {
         if input.piece == Piece::King && input.target_piece == Piece::Rook{
-            return castle(bitboard, input, boards.0 | boards.1);
+            return castle(bitboard, input, boards.0 | boards.1, color);
         }
     }
     false
@@ -160,7 +162,7 @@ fn diagonal_and_straight_check(input: &Input, board: u64) -> bool{
     for i in 1..8{
         if obstructed{return false}
         let pos = (offset.0 + displacement.0 * i, offset.1 + displacement.1 * i);
-        if !boundary_check(pos.0) && !boundary_check(pos.1){break}
+        if !boundary_check(pos.0) || !boundary_check(pos.1){break}
 
         let temp_board: u64 = 1 << (pos.1 * 8) + pos.0;
         if pos == target {return true};
@@ -171,7 +173,7 @@ fn diagonal_and_straight_check(input: &Input, board: u64) -> bool{
     false
 } 
 
-fn castle(bitboard: &[u64; 13], input: &Input, board: u64) -> bool {
+fn castle(bitboard: &[u64; 13], input: &Input, board: u64, color: &Color) -> bool {
     if (input.pos & bitboard[12] == 0) || (input.target & bitboard[12] == 0) {return false}
     let pos = find_coords(input.pos);
     let target = find_coords(input.target);
@@ -179,9 +181,18 @@ fn castle(bitboard: &[u64; 13], input: &Input, board: u64) -> bool {
     let displacement = target.0 - pos.0;
     let dir = displacement.signum();
 
-    for i in 0..displacement{
-        let x = input.pos << dir * i;
-        if x & board != 0 && x & bitboard[12] == 0{return false}
+
+    // every square strictly between king and rook must be empty
+    for i in 1..displacement.abs() {
+        if shift(input.pos, dir * i) & board != 0 { return false }
+    }
+
+    // the king may not start in, pass through, or land on an attacked square
+    let king_idx = if *color == Color::White { 10 } else { 4 };
+    for step in 0..=2 {
+        let mut trial = *bitboard;
+        trial[king_idx] = shift(input.pos, dir * step);
+        if check(&trial, color) { return false }
     }
     true
 }
@@ -228,8 +239,8 @@ fn move_piece(bitboard: &mut [u64; 13], input: Input, color: &Color){
     //e.p.
     let temp0 = find_coords(input.pos);
     let temp1 = find_coords(input.target);
-    let on_same_x = if (temp0.0 - temp1.1) == 0 {true} else {false};
-    if input.target & board == 0 && !on_same_x{
+    let on_same_x = if (temp0.0 - temp1.0) == 0 {true} else {false};
+    if input.piece == Piece::Pawn && input.target & board == 0 && !on_same_x {
         let x = if *color == Color::White{1} else {-1};
         let z = if *color == Color::White{0} else {6};
         bitboard[z] ^= shift(input.target, x * 8);
@@ -255,10 +266,9 @@ fn clean_bitboard(bitboard: &mut [u64; 13]){
 //If true, should be processed by the checkmate function
 fn check(bitboard: &[u64; 13], color: &Color) -> bool{
     //creates seperate boards for easier and clearer checking
-    let enemy = if *color == Color::White{&bitboard[0..5]} else {&bitboard[6..11]};
-    let friendly = if *color == Color::Black{&bitboard[6..11]} else {&bitboard[0..5]};
+    let enemy = if *color == Color::White{&bitboard[0..6]} else {&bitboard[6..12]};
     let mut all_pieces: u64 = 0;
-    for i in 0..13{all_pieces |= bitboard[i]}
+    for i in 0..12{all_pieces |= bitboard[i]}
     let king = if *color == Color::White{bitboard[10]} else {bitboard[4]};
 
     //Pawn, Knight & King
@@ -275,37 +285,24 @@ fn check(bitboard: &[u64; 13], color: &Color) -> bool{
     let diagonal_pieces = enemy[3] | enemy[5];
     let vertical_and_horizontal_pieces = enemy[1] | enemy[5];
 
-    
-    //First check that an enemy piece is in a place where it could check without obstructions. Then iterate to find the specific mask. 
-    if vertical_and_horizontal & vertical_and_horizontal_pieces != 0{
-        for i in 3..7{
-            if bitmasks[i] & vertical_and_horizontal_pieces != 0 {
-                //The big problem with this is figuring out how to do it for both directions, since the positions could either be greater or less than king. 
-                //This does work, but feels a bit inelegant
-                let piece = bitmasks[i] & vertical_and_horizontal_pieces;
-                let mut x: u64 = 0;
-                if piece > king {
-                    x = fill_1s((king.trailing_zeros() + 1) as i32, (piece.leading_zeros() - 1) as i32);
-                } else {
-                    x = fill_1s((piece.leading_zeros()) as i32, (king.trailing_zeros() - 1) as i32);
-                };
-                //I put this XOR statement here so it didn't try to include the threatening pieces. I think that's why it wasn't working before?
-                if (x & bitmasks[i]) & (all_pieces ^ piece) == 0 {return true}
-            }
+    if slider_attacks(king, vertical_and_horizontal_pieces, &bitmasks[3..7], all_pieces) {return true};
+    if slider_attacks(king, diagonal_pieces, &bitmasks[7..11], all_pieces) {return true};
+    false
+}
+
+fn slider_attacks(king: u64, pieces: u64, rays: &[u64], all_pieces: u64) -> bool {
+    let k = king.trailing_zeros() as i32;
+    for &ray in rays {
+        let hits = ray & pieces;
+        let above = hits & !(king | (king - 1));
+        let below = hits & (king - 1);
+        if above != 0 {
+            let a = above.trailing_zeros() as i32; // nearest attacker above
+            if fill_1s(k + 1, a) & ray & all_pieces == 0 { return true; }
         }
-    } else if diagonal & diagonal_pieces != 0 { 
-        for i in 7..11{
-            if bitmasks[i] & diagonal_pieces != 0 {
-                //this code is less braindead than before
-                let piece = bitmasks[i] & diagonal_pieces;
-                let mut x: u64 = 0;
-                if piece > king {
-                    x = fill_1s((king.trailing_zeros() + 1) as i32, (piece.trailing_zeros() - 1) as i32);
-                } else {
-                    x = fill_1s((piece.leading_zeros()) as i32, (king.trailing_zeros() - 1) as i32);
-                };
-                if (x & bitmasks[i]) & (all_pieces ^ piece) == 0 {return true}
-            }
+        if below != 0 {
+            let b = 63 - below.leading_zeros() as i32; // nearest attacker below
+            if fill_1s(b + 1, k) & ray & all_pieces == 0 { return true; }
         }
     }
     false

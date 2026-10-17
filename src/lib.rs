@@ -39,8 +39,9 @@ pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 11]{
     let mut board: [u64; 11] = [0; 11];
     let difference = ((offset.0 - 3), (offset.1 - 2));
     //pawn
-    board[0] = shift_u8(BITMASKS[0], difference.0) as u64;
-    if *color == Color::White {board[0] = board[0] << 24}
+    //pawn
+    let pawn_row = offset.1 + if *color == Color::White { -1 } else { 1 };
+    board[0] = shift(shift_u8(BITMASKS[0], difference.0) as u64, pawn_row * 8);
     //knight
     board[1] |= shift(shift_u8(BITMASKS[0], difference.0) as u64, difference.1 * 8);
     board[1] |= shift(shift_u8(BITMASKS[1], difference.0) as u64, 8 + difference.1 * 8);
@@ -48,7 +49,6 @@ pub fn assemble_bitmask(offset: (i32, i32), color: &Color) -> [u64; 11]{
     board[1] |= shift(shift_u8(BITMASKS[0], difference.0) as u64, 32 + difference.1 * 8);
     //king
     let temp = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)];
-    println!();
     for i in 0..8{
         board[2] |= shift(shift_u8(1, offset.0 + temp[i].0) as u64, (offset.1 + temp[i].1) * 8);
     }
