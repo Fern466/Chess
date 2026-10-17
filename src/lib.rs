@@ -17,8 +17,8 @@ pub fn bitboard() -> [u64; 13]{
     bitboard[7] = 0b10000001 << 56;
     bitboard[8] = 0b01000010 << 56;
     bitboard[9] = 0b00100100 << 56;
-    bitboard[10] = 0b00001000 << 56; //king
-    bitboard[11] = 0b00010000 << 56; //queen
+    bitboard[10] = 0b00010000 << 56; //king
+    bitboard[11] = 0b00001000 << 56; //queen
 
     //White Rook & King flags
     bitboard[12] |= 0b10010001 << 56;  
